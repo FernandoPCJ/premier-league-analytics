@@ -1,0 +1,30 @@
+# Ambiente virtual Python
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+jupyter_runtime/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Variáveis de ambiente e credenciais
+.env
+.env.*
+!.env.example
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos temporários
+*.tmp
+*.log
