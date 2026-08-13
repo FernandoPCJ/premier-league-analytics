@@ -22,7 +22,7 @@ st.write(
 
 
 # ==================================================
-# FILTROS
+# FILTRO DE TEMPORADA
 # ==================================================
 
 query_temporadas = """
@@ -33,17 +33,15 @@ FROM seasons
 ORDER BY season;
 """
 
-temporadas_df = executar_query(query_temporadas)
+temporadas_df = executar_query(
+    query_temporadas
+)
 
 opcoes_temporadas = (
     ["Todas"]
     + temporadas_df["season"].tolist()
 )
 
-
-# --------------------------------------------------
-# Filtros lado a lado
-# --------------------------------------------------
 
 col_filtro1, col_filtro2 = st.columns(2)
 
@@ -52,7 +50,8 @@ with col_filtro1:
 
     temporada_selecionada = st.selectbox(
         "Temporada:",
-        opcoes_temporadas
+        opcoes_temporadas,
+        key="visao_geral_temporada"
     )
 
 
@@ -71,9 +70,9 @@ else:
     )
 
 
-# --------------------------------------------------
-# Buscar clubes disponíveis
-# --------------------------------------------------
+# ==================================================
+# FILTRO DE CLUBE
+# ==================================================
 
 if season_id is None:
 
@@ -126,15 +125,12 @@ opcoes_clubes = (
 )
 
 
-# --------------------------------------------------
-# Filtro de clube
-# --------------------------------------------------
-
 with col_filtro2:
 
     clube_selecionado = st.selectbox(
         "Clube:",
-        opcoes_clubes
+        opcoes_clubes,
+        key="visao_geral_clube"
     )
 
 
@@ -223,7 +219,7 @@ else:
 
 
 # --------------------------------------------------
-# Executar consultas dos KPIs
+# Executar consultas
 # --------------------------------------------------
 
 kpis = executar_query(
@@ -236,28 +232,40 @@ clubes = executar_query(
 
 
 # --------------------------------------------------
-# Valores dos KPIs
+# Valores
 # --------------------------------------------------
 
 total_partidas = int(
-    kpis.loc[0, "partidas"]
+    kpis.loc[
+        0,
+        "partidas"
+    ]
 )
 
 total_temporadas = int(
-    kpis.loc[0, "temporadas"]
+    kpis.loc[
+        0,
+        "temporadas"
+    ]
 )
 
 total_gols = int(
-    kpis.loc[0, "total_gols"]
+    kpis.loc[
+        0,
+        "total_gols"
+    ]
 )
 
 total_clubes = int(
-    clubes.loc[0, "clubes"]
+    clubes.loc[
+        0,
+        "clubes"
+    ]
 )
 
 
 # --------------------------------------------------
-# Cards gerais
+# Cards
 # --------------------------------------------------
 
 col1, col2, col3, col4 = st.columns(4)
@@ -305,7 +313,7 @@ if club_id is not None:
 
 
     # --------------------------------------------------
-    # Filtro de temporada para o resumo do clube
+    # Filtro de temporada
     # --------------------------------------------------
 
     if season_id is None:
@@ -320,7 +328,7 @@ if club_id is not None:
 
 
     # --------------------------------------------------
-    # Consulta do resumo do clube
+    # Consulta do clube
     # --------------------------------------------------
 
     query_clube = f"""
@@ -399,15 +407,24 @@ if club_id is not None:
     # --------------------------------------------------
 
     jogos_clube = int(
-        dados_clube.loc[0, "jogos"]
+        dados_clube.loc[
+            0,
+            "jogos"
+        ]
     )
 
     pontos_clube = int(
-        dados_clube.loc[0, "pontos"]
+        dados_clube.loc[
+            0,
+            "pontos"
+        ]
     )
 
     gols_clube = int(
-        dados_clube.loc[0, "gols"]
+        dados_clube.loc[
+            0,
+            "gols"
+        ]
     )
 
     aproveitamento_clube = float(
@@ -419,7 +436,7 @@ if club_id is not None:
 
 
     # --------------------------------------------------
-    # Título do clube
+    # Título
     # --------------------------------------------------
 
     st.markdown(
@@ -557,8 +574,18 @@ if club_id is not None:
     )
 
 
+    evolucao_clube[
+        "pontos_por_jogo"
+    ] = (
+        evolucao_clube[
+            "pontos_por_jogo"
+        ]
+        .astype(float)
+    )
+
+
     # --------------------------------------------------
-    # Gráfico de evolução do clube
+    # Gráfico
     # --------------------------------------------------
 
     fig_evolucao_clube = px.line(
@@ -597,21 +624,25 @@ if club_id is not None:
 
 
     # --------------------------------------------------
-    # Destacar temporada escolhida
+    # Destacar temporada
     # --------------------------------------------------
 
     if temporada_selecionada != "Todas":
 
-        destaque_clube = evolucao_clube[
-            evolucao_clube["season"]
-            == temporada_selecionada
-        ]
+        destaque_clube = (
+            evolucao_clube[
+                evolucao_clube["season"]
+                == temporada_selecionada
+            ]
+        )
 
 
         if not destaque_clube.empty:
 
             fig_evolucao_clube.add_scatter(
-                x=destaque_clube["season"],
+                x=destaque_clube[
+                    "season"
+                ],
 
                 y=destaque_clube[
                     "pontos_por_jogo"
@@ -642,7 +673,7 @@ if club_id is not None:
 
 
 # ==================================================
-# EVOLUÇÃO DA MÉDIA DE GOLS DA PREMIER LEAGUE
+# EVOLUÇÃO DA MÉDIA DE GOLS
 # ==================================================
 
 st.divider()
@@ -690,6 +721,16 @@ gols_temporada = executar_query(
 )
 
 
+gols_temporada[
+    "media_gols"
+] = (
+    gols_temporada[
+        "media_gols"
+    ]
+    .astype(float)
+)
+
+
 fig_gols = px.line(
     gols_temporada,
 
@@ -726,43 +767,46 @@ fig_gols.update_layout(
 
 
 # --------------------------------------------------
-# Destaque da temporada selecionada
+# Destacar temporada
 # --------------------------------------------------
 
 if temporada_selecionada != "Todas":
 
-    dados_destaque = gols_temporada[
-        gols_temporada["season"]
-        == temporada_selecionada
-    ]
-
-
-    fig_gols.add_scatter(
-        x=dados_destaque["season"],
-
-        y=dados_destaque["media_gols"],
-
-        mode="markers",
-
-        marker=dict(
-            size=16,
-
-            symbol="circle-open",
-
-            line=dict(
-                width=3
-            )
-        ),
-
-        name=(
-            f"Selecionada: "
-            f"{temporada_selecionada}"
-        ),
-
-        showlegend=False,
-
-        hoverinfo="skip"
+    dados_destaque = (
+        gols_temporada[
+            gols_temporada["season"]
+            == temporada_selecionada
+        ]
     )
+
+
+    if not dados_destaque.empty:
+
+        fig_gols.add_scatter(
+            x=dados_destaque[
+                "season"
+            ],
+
+            y=dados_destaque[
+                "media_gols"
+            ],
+
+            mode="markers",
+
+            marker=dict(
+                size=16,
+
+                symbol="circle-open",
+
+                line=dict(
+                    width=3
+                )
+            ),
+
+            showlegend=False,
+
+            hoverinfo="skip"
+        )
 
 
 st.plotly_chart(
@@ -838,18 +882,36 @@ resultados_temporada = executar_query(
 )
 
 
-resultados_long = resultados_temporada.melt(
-    id_vars="season",
+colunas_resultados = [
+    "vitorias_casa",
+    "empates",
+    "vitorias_fora"
+]
 
-    value_vars=[
-        "vitorias_casa",
-        "empates",
-        "vitorias_fora"
-    ],
 
-    var_name="resultado",
+for coluna in colunas_resultados:
 
-    value_name="percentual"
+    resultados_temporada[coluna] = (
+        resultados_temporada[coluna]
+        .astype(float)
+    )
+
+
+resultados_long = (
+    resultados_temporada
+    .melt(
+        id_vars="season",
+
+        value_vars=[
+            "vitorias_casa",
+            "empates",
+            "vitorias_fora"
+        ],
+
+        var_name="resultado",
+
+        value_name="percentual"
+    )
 )
 
 
@@ -865,9 +927,15 @@ nomes_resultados = {
 }
 
 
-resultados_long["resultado"] = (
-    resultados_long["resultado"]
-    .map(nomes_resultados)
+resultados_long[
+    "resultado"
+] = (
+    resultados_long[
+        "resultado"
+    ]
+    .map(
+        nomes_resultados
+    )
 )
 
 
@@ -907,38 +975,46 @@ fig_resultados.update_layout(
 
 
 # --------------------------------------------------
-# Destaque da temporada selecionada
+# Destacar temporada
 # --------------------------------------------------
 
 if temporada_selecionada != "Todas":
 
-    destaque_resultados = resultados_long[
-        resultados_long["season"]
-        == temporada_selecionada
-    ]
-
-
-    fig_resultados.add_scatter(
-        x=destaque_resultados["season"],
-
-        y=destaque_resultados["percentual"],
-
-        mode="markers",
-
-        marker=dict(
-            size=14,
-
-            symbol="circle-open",
-
-            line=dict(
-                width=3
-            )
-        ),
-
-        showlegend=False,
-
-        hoverinfo="skip"
+    destaque_resultados = (
+        resultados_long[
+            resultados_long["season"]
+            == temporada_selecionada
+        ]
     )
+
+
+    if not destaque_resultados.empty:
+
+        fig_resultados.add_scatter(
+            x=destaque_resultados[
+                "season"
+            ],
+
+            y=destaque_resultados[
+                "percentual"
+            ],
+
+            mode="markers",
+
+            marker=dict(
+                size=14,
+
+                symbol="circle-open",
+
+                line=dict(
+                    width=3
+                )
+            ),
+
+            showlegend=False,
+
+            hoverinfo="skip"
+        )
 
 
 st.plotly_chart(
@@ -948,7 +1024,7 @@ st.plotly_chart(
 
 
 # ==================================================
-# RANKING HISTÓRICO DOS CLUBES
+# RANKING DOS CLUBES
 # ==================================================
 
 st.divider()
@@ -969,7 +1045,7 @@ else:
 
 
 # --------------------------------------------------
-# Filtro SQL do ranking
+# Filtro de temporada
 # --------------------------------------------------
 
 if season_id is None:
@@ -982,6 +1058,10 @@ else:
         f"WHERE season_id = {season_id}"
     )
 
+
+# --------------------------------------------------
+# Consulta
+# --------------------------------------------------
 
 query_ranking = f"""
 WITH jogos_clubes AS (
@@ -1055,7 +1135,21 @@ ranking_clubes = executar_query(
 
 
 # --------------------------------------------------
-# Métrica do ranking
+# Garantir tipos numéricos
+# --------------------------------------------------
+
+ranking_clubes[
+    "aproveitamento"
+] = (
+    ranking_clubes[
+        "aproveitamento"
+    ]
+    .astype(float)
+)
+
+
+# --------------------------------------------------
+# Métrica
 # --------------------------------------------------
 
 metrica_ranking = st.selectbox(
@@ -1065,7 +1159,9 @@ metrica_ranking = st.selectbox(
         "Pontos",
         "Gols",
         "Aproveitamento"
-    ]
+    ],
+
+    key="visao_geral_metrica_ranking"
 )
 
 
@@ -1112,7 +1208,7 @@ top10_clubes = (
 
 
 # --------------------------------------------------
-# Garantir que o clube selecionado apareça
+# Garantir clube selecionado no ranking
 # --------------------------------------------------
 
 if (
@@ -1121,10 +1217,12 @@ if (
     not in top10_clubes["clube"].values
 ):
 
-    clube_fora_top10 = ranking_ordenado[
-        ranking_ordenado["clube"]
-        == clube_selecionado
-    ]
+    clube_fora_top10 = (
+        ranking_ordenado[
+            ranking_ordenado["clube"]
+            == clube_selecionado
+        ]
+    )
 
 
     if not clube_fora_top10.empty:
@@ -1165,8 +1263,12 @@ top10_clubes = (
 
 if metrica_ranking == "Aproveitamento":
 
-    top10_clubes["texto"] = (
-        top10_clubes[coluna_ranking]
+    top10_clubes[
+        "texto"
+    ] = (
+        top10_clubes[
+            coluna_ranking
+        ]
         .map(
             lambda x:
             f"{x:.2f}%"
@@ -1175,8 +1277,12 @@ if metrica_ranking == "Aproveitamento":
 
 else:
 
-    top10_clubes["texto"] = (
-        top10_clubes[coluna_ranking]
+    top10_clubes[
+        "texto"
+    ] = (
+        top10_clubes[
+            coluna_ranking
+        ]
         .map(
             lambda x:
             f"{int(x)}"
@@ -1185,11 +1291,15 @@ else:
 
 
 # --------------------------------------------------
-# Identificar clube selecionado
+# Destaque
 # --------------------------------------------------
 
-top10_clubes["destaque"] = (
-    top10_clubes["clube"]
+top10_clubes[
+    "destaque"
+] = (
+    top10_clubes[
+        "clube"
+    ]
     .apply(
         lambda clube:
         "Clube selecionado"
@@ -1200,7 +1310,19 @@ top10_clubes["destaque"] = (
 
 
 # --------------------------------------------------
-# Gráfico do ranking
+# Preservar posição real do ranking
+# --------------------------------------------------
+
+ordem_clubes = (
+    top10_clubes[
+        "clube"
+    ]
+    .tolist()
+)
+
+
+# --------------------------------------------------
+# Gráfico
 # --------------------------------------------------
 
 fig_ranking = px.bar(
@@ -1251,6 +1373,11 @@ fig_ranking.update_layout(
 
     showlegend=(
         clube_selecionado != "Todos"
+    ),
+
+    yaxis=dict(
+        categoryorder="array",
+        categoryarray=ordem_clubes
     )
 )
 

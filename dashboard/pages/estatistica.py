@@ -8,6 +8,46 @@ from scipy import stats
 
 from utils.database import executar_query
 
+
+# ==================================================
+# FUNÇÕES AUXILIARES
+# ==================================================
+
+def formatar_p_valor(valor, casas=4):
+    if pd.isna(valor):
+        return "N/A"
+
+    if valor < 0.001:
+        return "< 0,001"
+
+    return f"{valor:.{casas}f}".replace(".", ",")
+
+
+def calcular_correlacao_segura(serie_1, serie_2, metodo="pearson"):
+    dados = pd.concat(
+        [serie_1, serie_2],
+        axis=1
+    ).dropna()
+
+    if (
+        len(dados) < 3
+        or dados.iloc[:, 0].nunique() < 2
+        or dados.iloc[:, 1].nunique() < 2
+    ):
+        return np.nan, np.nan
+
+    if metodo == "pearson":
+        return stats.pearsonr(
+            dados.iloc[:, 0],
+            dados.iloc[:, 1]
+        )
+
+    return stats.spearmanr(
+        dados.iloc[:, 0],
+        dados.iloc[:, 1]
+    )
+
+
 # ==================================================
 # CABEÇALHO
 # ==================================================
@@ -434,7 +474,7 @@ else:
 
 
     # --------------------------------------------------
-    # Título do clube
+    # Contexto do clube
     # --------------------------------------------------
 
     if temporada_selecionada == "Todas":
@@ -506,10 +546,6 @@ else:
 st.divider()
 
 
-# --------------------------------------------------
-# Definir título e descrição
-# --------------------------------------------------
-
 if club_id is None:
 
     st.subheader(
@@ -535,7 +571,7 @@ else:
 
 
 # ==================================================
-# DADOS DA LIGA
+# DADOS DA VANTAGEM DE MANDO
 # ==================================================
 
 if club_id is None:
@@ -575,11 +611,6 @@ if club_id is None:
     ORDER BY
         s.season;
     """
-
-
-# ==================================================
-# DADOS DO CLUBE
-# ==================================================
 
 else:
 
@@ -671,10 +702,6 @@ else:
     """
 
 
-# ==================================================
-# EXECUTAR CONSULTA
-# ==================================================
-
 vantagem_mando = executar_query(
     query_mando
 )
@@ -684,24 +711,23 @@ vantagem_mando = executar_query(
 # Garantir tipos numéricos
 # --------------------------------------------------
 
-vantagem_mando["diferenca_media"] = (
-    vantagem_mando["diferenca_media"]
-    .astype(float)
-)
+colunas_mando_numericas = [
+    "diferenca_media",
+    "media_gols_casa",
+    "media_gols_fora"
+]
 
-vantagem_mando["media_gols_casa"] = (
-    vantagem_mando["media_gols_casa"]
-    .astype(float)
-)
 
-vantagem_mando["media_gols_fora"] = (
-    vantagem_mando["media_gols_fora"]
-    .astype(float)
-)
+for coluna in colunas_mando_numericas:
+
+    vantagem_mando[coluna] = (
+        vantagem_mando[coluna]
+        .astype(float)
+    )
 
 
 # ==================================================
-# GRÁFICO
+# GRÁFICO DA VANTAGEM DE MANDO
 # ==================================================
 
 fig_mando = px.line(
@@ -746,10 +772,6 @@ fig_mando.update_traces(
 )
 
 
-# --------------------------------------------------
-# Linha de referência
-# --------------------------------------------------
-
 fig_mando.add_hline(
     y=0,
 
@@ -770,22 +792,26 @@ fig_mando.update_layout(
 )
 
 
-# ==================================================
-# DESTACAR TEMPORADA SELECIONADA
-# ==================================================
+# --------------------------------------------------
+# Destacar temporada selecionada
+# --------------------------------------------------
 
 if temporada_selecionada != "Todas":
 
-    destaque_mando = vantagem_mando[
-        vantagem_mando["season"]
-        == temporada_selecionada
-    ]
+    destaque_mando = (
+        vantagem_mando[
+            vantagem_mando["season"]
+            == temporada_selecionada
+        ]
+    )
 
 
     if not destaque_mando.empty:
 
         fig_mando.add_scatter(
-            x=destaque_mando["season"],
+            x=destaque_mando[
+                "season"
+            ],
 
             y=destaque_mando[
                 "diferenca_media"
@@ -809,14 +835,11 @@ if temporada_selecionada != "Todas":
         )
 
 
-# ==================================================
-# EXIBIR GRÁFICO
-# ==================================================
-
 st.plotly_chart(
     fig_mando,
     width="stretch"
 )
+
 
 # ==================================================
 # TESTE ESTATÍSTICO DA VANTAGEM DE MANDO
@@ -886,7 +909,7 @@ if club_id is None:
 
 
     # --------------------------------------------------
-    # Diferença casa - fora
+    # Diferenças casa - fora
     # --------------------------------------------------
 
     diferencas = (
@@ -915,44 +938,74 @@ if club_id is None:
 
 
     # --------------------------------------------------
-    # Tamanho de efeito de Cohen
+    # Cohen's dz
     # --------------------------------------------------
 
-    cohen_dz = (
-        media_diferenca
-        / desvio_diferenca
-    )
+    if (
+        pd.isna(desvio_diferenca)
+        or desvio_diferenca == 0
+    ):
+
+        cohen_dz = np.nan
+
+    else:
+
+        cohen_dz = (
+            media_diferenca
+            / desvio_diferenca
+        )
 
 
     # --------------------------------------------------
     # Intervalo de confiança de 95%
     # --------------------------------------------------
 
-    erro_padrao = stats.sem(
-        diferencas
-    )
+    if len(diferencas) >= 2:
+
+        erro_padrao = stats.sem(
+            diferencas
+        )
 
 
-    ic_95 = stats.t.interval(
-        confidence=0.95,
+        ic_95 = stats.t.interval(
+            confidence=0.95,
 
-        df=len(diferencas) - 1,
+            df=len(diferencas) - 1,
 
-        loc=media_diferenca,
+            loc=media_diferenca,
 
-        scale=erro_padrao
-    )
+            scale=erro_padrao
+        )
+
+    else:
+
+        ic_95 = (
+            np.nan,
+            np.nan
+        )
 
 
     # --------------------------------------------------
     # Wilcoxon
     # --------------------------------------------------
 
-    teste_wilcoxon = stats.wilcoxon(
-        dados_teste["home_goals"],
-        dados_teste["away_goals"],
-        alternative="two-sided"
-    )
+    if np.allclose(
+        diferencas.to_numpy(),
+        0
+    ):
+
+        p_wilcoxon_valor = 1.0
+
+    else:
+
+        teste_wilcoxon = stats.wilcoxon(
+            diferencas,
+            alternative="two-sided"
+        )
+
+        p_wilcoxon_valor = (
+            teste_wilcoxon.pvalue
+        )
 
 
     # ==================================================
@@ -972,39 +1025,54 @@ if club_id is None:
 
     with col2:
 
-        st.metric(
-            label="IC 95%",
-            value=(
+        if (
+            pd.isna(ic_95[0])
+            or pd.isna(ic_95[1])
+        ):
+
+            ic_texto = "N/A"
+
+        else:
+
+            ic_texto = (
                 f"{ic_95[0]:.3f} a "
                 f"{ic_95[1]:.3f}"
             )
+
+
+        st.metric(
+            label="IC 95%",
+            value=ic_texto
         )
 
 
     with col3:
 
+        if pd.isna(cohen_dz):
+
+            cohen_texto = "N/A"
+
+        else:
+
+            cohen_texto = (
+                f"{cohen_dz:.3f}"
+            )
+
+
         st.metric(
             label="Cohen's dz",
-            value=f"{cohen_dz:.3f}"
+            value=cohen_texto
         )
 
 
     with col4:
 
-        if teste_t.pvalue < 0.001:
-
-            p_texto = "< 0,001"
-
-        else:
-
-            p_texto = (
-                f"{teste_t.pvalue:.3f}"
-            )
-
-
         st.metric(
             label="p-valor do teste t",
-            value=p_texto
+            value=formatar_p_valor(
+                teste_t.pvalue,
+                casas=3
+            )
         )
 
 
@@ -1025,7 +1093,13 @@ if club_id is None:
         )
 
 
-    if abs(cohen_dz) < 0.20:
+    if pd.isna(cohen_dz):
+
+        interpretacao_efeito = (
+            "não disponível"
+        )
+
+    elif abs(cohen_dz) < 0.20:
 
         interpretacao_efeito = "muito pequeno"
 
@@ -1042,33 +1116,32 @@ if club_id is None:
         interpretacao_efeito = "grande"
 
 
-    st.info(
-        f"{resultado_t}. "
-        f"O tamanho de efeito observado é "
-        f"{interpretacao_efeito} "
-        f"(Cohen's dz = {cohen_dz:.3f})."
-    )
+    if pd.isna(cohen_dz):
 
-
-    # --------------------------------------------------
-    # Resultado complementar de Wilcoxon
-    # --------------------------------------------------
-
-    if teste_wilcoxon.pvalue < 0.001:
-
-        p_wilcoxon = "< 0,001"
+        texto_efeito = (
+            "O tamanho de efeito não pôde ser calculado."
+        )
 
     else:
 
-        p_wilcoxon = (
-            f"{teste_wilcoxon.pvalue:.3f}"
+        texto_efeito = (
+            f"O tamanho de efeito observado é "
+            f"{interpretacao_efeito} "
+            f"(Cohen's dz = {cohen_dz:.3f})."
         )
+
+
+    st.info(
+        f"{resultado_t}. "
+        f"{texto_efeito}"
+    )
 
 
     st.caption(
         "Teste não paramétrico de Wilcoxon: "
-        f"p-valor {p_wilcoxon}."
+        f"p-valor {formatar_p_valor(p_wilcoxon_valor, casas=3)}."
     )
+
 
 # ==================================================
 # SIGNIFICÂNCIA POR TEMPORADA + CORREÇÃO DE HOLM
@@ -1087,10 +1160,6 @@ if club_id is None:
         "considerando a correção de Holm para múltiplos testes."
     )
 
-
-    # --------------------------------------------------
-    # Buscar dados de todas as temporadas
-    # --------------------------------------------------
 
     query_testes_temporadas = """
     SELECT
@@ -1159,13 +1228,12 @@ if club_id is None:
         )
 
 
-        # ----------------------------------------------
-        # Cohen's dz
-        # ----------------------------------------------
+        if (
+            pd.isna(desvio_temporada)
+            or desvio_temporada == 0
+        ):
 
-        if desvio_temporada == 0:
-
-            cohen_temporada = 0.0
+            cohen_temporada = np.nan
 
         else:
 
@@ -1202,7 +1270,9 @@ if club_id is None:
     # ==================================================
 
     p_valores = (
-        testes_temporadas["p_valor"]
+        testes_temporadas[
+            "p_valor"
+        ]
         .to_numpy()
     )
 
@@ -1241,7 +1311,6 @@ if club_id is None:
         )
 
 
-        # Holm precisa preservar monotonicidade
         valor_ajustado = max(
             valor_ajustado,
             maior_ajustado
@@ -1279,7 +1348,7 @@ if club_id is None:
 
 
     # ==================================================
-    # TABELA PARA EXIBIÇÃO
+    # TABELA
     # ==================================================
 
     tabela_holm = (
@@ -1314,7 +1383,8 @@ if club_id is None:
             "Diferença média"
         ]
         .map(
-            lambda x: f"{x:.3f}"
+            lambda x:
+            f"{x:.3f}"
         )
     )
 
@@ -1327,9 +1397,10 @@ if club_id is None:
         ]
         .map(
             lambda x:
-            "< 0,001"
-            if x < 0.001
-            else f"{x:.4f}"
+            formatar_p_valor(
+                x,
+                casas=4
+            )
         )
     )
 
@@ -1342,9 +1413,10 @@ if club_id is None:
         ]
         .map(
             lambda x:
-            "< 0,001"
-            if x < 0.001
-            else f"{x:.4f}"
+            formatar_p_valor(
+                x,
+                casas=4
+            )
         )
     )
 
@@ -1356,7 +1428,10 @@ if club_id is None:
             "Cohen's dz"
         ]
         .map(
-            lambda x: f"{x:.3f}"
+            lambda x:
+            "N/A"
+            if pd.isna(x)
+            else f"{x:.3f}"
         )
     )
 
@@ -1401,6 +1476,7 @@ if club_id is None:
         "após a correção de Holm."
     )
 
+
 # ==================================================
 # CORRELAÇÃO ENTRE INDICADORES DAS PARTIDAS
 # ==================================================
@@ -1433,7 +1509,7 @@ else:
 
 
 # --------------------------------------------------
-# Montar base por equipe/partida
+# Base por equipe/partida
 # --------------------------------------------------
 
 query_correlacao = f"""
@@ -1488,10 +1564,6 @@ FROM dados_equipes
 """
 
 
-# --------------------------------------------------
-# Aplicar clube selecionado
-# --------------------------------------------------
-
 if club_id is not None:
 
     query_correlacao += (
@@ -1507,10 +1579,6 @@ dados_correlacao = executar_query(
 )
 
 
-# --------------------------------------------------
-# Variáveis analisadas
-# --------------------------------------------------
-
 variaveis_correlacao = [
     "goals",
     "shots",
@@ -1521,15 +1589,31 @@ variaveis_correlacao = [
 ]
 
 
-# --------------------------------------------------
-# Garantir valores numéricos
-# --------------------------------------------------
-
 for coluna in variaveis_correlacao:
 
     dados_correlacao[coluna] = (
         dados_correlacao[coluna]
         .astype(float)
+    )
+
+
+# --------------------------------------------------
+# Aviso para variáveis constantes
+# --------------------------------------------------
+
+variaveis_constantes = [
+    coluna
+    for coluna in variaveis_correlacao
+    if dados_correlacao[coluna].nunique() < 2
+]
+
+
+if variaveis_constantes:
+
+    st.caption(
+        "Algumas correlações podem aparecer como indisponíveis "
+        "porque uma das variáveis não apresentou variação no "
+        "recorte selecionado."
     )
 
 
@@ -1546,10 +1630,6 @@ matriz_pearson = (
     )
 )
 
-
-# --------------------------------------------------
-# Nomes em português
-# --------------------------------------------------
 
 nomes_variaveis = {
     "goals":
@@ -1629,8 +1709,9 @@ st.plotly_chart(
     width="stretch"
 )
 
+
 # ==================================================
-# PRINCIPAIS CORRELAÇÕES
+# RELAÇÕES SELECIONADAS
 # ==================================================
 
 st.markdown(
@@ -1688,21 +1769,23 @@ for nome, variavel_1, variavel_2 in pares_correlacao:
                 nome,
 
             "Pearson r":
-                round(r, 3)
+                (
+                    "N/A"
+                    if pd.isna(r)
+                    else f"{r:.3f}"
+                )
         }
     )
 
 
-tabela_correlacoes = pd.DataFrame(
-    resumo_correlacoes
-)
-
-
 st.dataframe(
-    tabela_correlacoes,
+    pd.DataFrame(
+        resumo_correlacoes
+    ),
     width="stretch",
     hide_index=True
 )
+
 
 # ==================================================
 # COMPARAÇÃO PEARSON X SPEARMAN
@@ -1719,10 +1802,6 @@ st.write(
     "por postos de Spearman nas principais relações analisadas."
 )
 
-
-# --------------------------------------------------
-# Relações analisadas
-# --------------------------------------------------
 
 pares_comparacao = [
     (
@@ -1757,50 +1836,48 @@ pares_comparacao = [
 ]
 
 
-# --------------------------------------------------
-# Calcular Pearson e Spearman
-# --------------------------------------------------
-
 resultados_comparacao = []
 
 
 for nome, variavel_1, variavel_2 in pares_comparacao:
 
-    # Pearson
-    pearson_r, pearson_p = stats.pearsonr(
+    pearson_r, pearson_p = calcular_correlacao_segura(
         dados_correlacao[variavel_1],
-        dados_correlacao[variavel_2]
+        dados_correlacao[variavel_2],
+        metodo="pearson"
     )
 
 
-    # Spearman
-    spearman_rho, spearman_p = stats.spearmanr(
+    spearman_rho, spearman_p = calcular_correlacao_segura(
         dados_correlacao[variavel_1],
-        dados_correlacao[variavel_2]
+        dados_correlacao[variavel_2],
+        metodo="spearman"
     )
+
+
+    if (
+        pd.isna(pearson_r)
+        or pd.isna(spearman_rho)
+    ):
+
+        diferenca_absoluta = np.nan
+
+    else:
+
+        diferenca_absoluta = abs(
+            pearson_r
+            - spearman_rho
+        )
 
 
     resultados_comparacao.append(
         {
             "Relação": nome,
-
-            "Pearson":
-                pearson_r,
-
-            "Spearman":
-                spearman_rho,
-
-            "Diferença absoluta":
-                abs(
-                    pearson_r
-                    - spearman_rho
-                ),
-
-            "p Pearson":
-                pearson_p,
-
-            "p Spearman":
-                spearman_p
+            "Pearson": pearson_r,
+            "Spearman": spearman_rho,
+            "Diferença absoluta": diferenca_absoluta,
+            "p Pearson": pearson_p,
+            "p Spearman": spearman_p
         }
     )
 
@@ -1811,7 +1888,7 @@ comparacao_correlacoes = pd.DataFrame(
 
 
 # ==================================================
-# TABELA
+# TABELA PEARSON X SPEARMAN
 # ==================================================
 
 tabela_comparacao = (
@@ -1827,40 +1904,21 @@ tabela_comparacao = (
 )
 
 
-tabela_comparacao[
-    "Pearson"
-] = (
-    tabela_comparacao[
-        "Pearson"
-    ]
-    .map(
-        lambda x: f"{x:.3f}"
-    )
-)
-
-
-tabela_comparacao[
-    "Spearman"
-] = (
-    tabela_comparacao[
-        "Spearman"
-    ]
-    .map(
-        lambda x: f"{x:.3f}"
-    )
-)
-
-
-tabela_comparacao[
+for coluna in [
+    "Pearson",
+    "Spearman",
     "Diferença absoluta"
-] = (
-    tabela_comparacao[
-        "Diferença absoluta"
-    ]
-    .map(
-        lambda x: f"{x:.3f}"
+]:
+
+    tabela_comparacao[coluna] = (
+        tabela_comparacao[coluna]
+        .map(
+            lambda x:
+            "N/A"
+            if pd.isna(x)
+            else f"{x:.3f}"
+        )
     )
-)
 
 
 st.dataframe(
@@ -1871,7 +1929,7 @@ st.dataframe(
 
 
 # ==================================================
-# PREPARAR DADOS PARA O GRÁFICO
+# GRÁFICO PEARSON X SPEARMAN
 # ==================================================
 
 comparacao_long = (
@@ -1889,58 +1947,69 @@ comparacao_long = (
 
         value_name="Correlação"
     )
+    .dropna(
+        subset=[
+            "Correlação"
+        ]
+    )
 )
 
 
-# ==================================================
-# GRÁFICO
-# ==================================================
+if comparacao_long.empty:
 
-fig_comparacao = px.bar(
-    comparacao_long,
+    st.info(
+        "Não há variação suficiente no recorte selecionado "
+        "para comparar Pearson e Spearman."
+    )
 
-    x="Relação",
+else:
 
-    y="Correlação",
+    fig_comparacao = px.bar(
+        comparacao_long,
 
-    color="Método",
+        x="Relação",
 
-    barmode="group",
+        y="Correlação",
 
-    text="Correlação",
+        color="Método",
 
-    labels={
-        "Relação":
-            "",
+        barmode="group",
 
-        "Correlação":
-            "Coeficiente de correlação",
+        text="Correlação",
 
-        "Método":
-            ""
-    }
-)
+        labels={
+            "Relação":
+                "",
 
+            "Correlação":
+                "Coeficiente de correlação",
 
-fig_comparacao.update_traces(
-    texttemplate="%{text:.3f}",
-    textposition="outside"
-)
-
-
-fig_comparacao.update_layout(
-    yaxis_title="Coeficiente de correlação",
-
-    xaxis_title="",
-
-    legend_title_text=""
-)
+            "Método":
+                ""
+        }
+    )
 
 
-st.plotly_chart(
-    fig_comparacao,
-    width="stretch"
-)
+    fig_comparacao.update_traces(
+        texttemplate="%{text:.3f}",
+        textposition="outside"
+    )
+
+
+    fig_comparacao.update_layout(
+        yaxis_title="Coeficiente de correlação",
+
+        xaxis_title="",
+
+        legend_title_text=""
+    )
+
+
+    st.plotly_chart(
+        fig_comparacao,
+        width="stretch"
+    )
+
 
 # ==================================================
 # DESEMPENHO MÉDIO X CONSISTÊNCIA DOS CLUBES
@@ -1956,6 +2025,11 @@ st.write(
     "Compare o desempenho médio dos clubes com a variação "
     "dos resultados entre temporadas. Para esta análise, "
     "são considerados clubes com pelo menos 5 temporadas."
+)
+
+st.caption(
+    "Esta análise utiliza o histórico completo das temporadas, "
+    "independentemente do filtro de temporada selecionado no topo."
 )
 
 
@@ -2054,10 +2128,6 @@ dados_consistencia = executar_query(
 )
 
 
-# --------------------------------------------------
-# Garantir tipos numéricos
-# --------------------------------------------------
-
 dados_consistencia[
     "pontos_por_jogo"
 ] = (
@@ -2112,10 +2182,6 @@ resumo_consistencia = (
 )
 
 
-# --------------------------------------------------
-# Pelo menos 5 temporadas
-# --------------------------------------------------
-
 resumo_consistencia = (
     resumo_consistencia[
         resumo_consistencia[
@@ -2125,10 +2191,6 @@ resumo_consistencia = (
     .copy()
 )
 
-
-# --------------------------------------------------
-# Arredondamentos
-# --------------------------------------------------
 
 resumo_consistencia[
     "media_pontos_jogo"
@@ -2204,28 +2266,28 @@ def classificar_clube(linha):
         )
 
 
-    elif alto_desempenho and not consistente:
+    if alto_desempenho and not consistente:
 
         return (
             "Alto desempenho + volátil"
         )
 
 
-    elif not alto_desempenho and consistente:
+    if not alto_desempenho and consistente:
 
         return (
             "Abaixo da média + consistente"
         )
 
 
-    else:
-
-        return (
-            "Abaixo da média + volátil"
-        )
+    return (
+        "Abaixo da média + volátil"
+    )
 
 
-resumo_consistencia["perfil"] = (
+resumo_consistencia[
+    "perfil"
+] = (
     resumo_consistencia.apply(
         classificar_clube,
         axis=1
@@ -2234,17 +2296,36 @@ resumo_consistencia["perfil"] = (
 
 
 # ==================================================
-# DESTAQUE DO CLUBE SELECIONADO
+# DESTAQUE DO CLUBE
 # ==================================================
 
-resumo_consistencia["destaque"] = (
-    resumo_consistencia["clube"]
+resumo_consistencia[
+    "destaque"
+] = (
+    resumo_consistencia[
+        "clube"
+    ]
     .apply(
         lambda clube:
         "Clube selecionado"
         if clube == clube_selecionado
         else "Demais clubes"
     )
+)
+
+
+clube_consistencia = (
+    resumo_consistencia[
+        resumo_consistencia[
+            "clube"
+        ] == clube_selecionado
+    ]
+)
+
+
+clube_incluido_consistencia = (
+    clube_selecionado != "Todos"
+    and not clube_consistencia.empty
 )
 
 
@@ -2272,7 +2353,7 @@ with col2:
 
 
 # ==================================================
-# SCATTER
+# SCATTER DE CONSISTÊNCIA
 # ==================================================
 
 fig_consistencia = px.scatter(
@@ -2332,10 +2413,6 @@ fig_consistencia.update_traces(
 )
 
 
-# --------------------------------------------------
-# Linha vertical: desempenho médio
-# --------------------------------------------------
-
 fig_consistencia.add_vline(
     x=media_geral_pontos,
 
@@ -2346,10 +2423,6 @@ fig_consistencia.add_vline(
     annotation_position="top"
 )
 
-
-# --------------------------------------------------
-# Linha horizontal: consistência média
-# --------------------------------------------------
 
 fig_consistencia.add_hline(
     y=media_geral_desvio,
@@ -2369,9 +2442,7 @@ fig_consistencia.update_layout(
 
     legend_title_text="",
 
-    showlegend=(
-        clube_selecionado != "Todos"
-    )
+    showlegend=clube_incluido_consistencia
 )
 
 
@@ -2379,45 +2450,36 @@ fig_consistencia.update_layout(
 # Nome do clube selecionado
 # --------------------------------------------------
 
-if clube_selecionado != "Todos":
+if clube_incluido_consistencia:
 
-    clube_consistencia = (
-        resumo_consistencia[
-            resumo_consistencia["clube"]
-            == clube_selecionado
-        ]
+    fig_consistencia.add_annotation(
+        x=clube_consistencia[
+            "media_pontos_jogo"
+        ].iloc[0],
+
+        y=clube_consistencia[
+            "desvio_pontos_jogo"
+        ].iloc[0],
+
+        text=clube_selecionado,
+
+        showarrow=True,
+
+        arrowhead=2,
+
+        ax=40,
+
+        ay=-35
     )
 
 
-    if not clube_consistencia.empty:
+elif clube_selecionado != "Todos":
 
-        fig_consistencia.add_annotation(
-            x=clube_consistencia[
-                "media_pontos_jogo"
-            ].iloc[0],
-
-            y=clube_consistencia[
-                "desvio_pontos_jogo"
-            ].iloc[0],
-
-            text=clube_selecionado,
-
-            showarrow=True,
-
-            arrowhead=2,
-
-            ax=40,
-
-            ay=-35
-        )
-
-    else:
-
-        st.info(
-            f"O {clube_selecionado} não possui pelo menos "
-            "5 temporadas no período analisado e, por isso, "
-            "não entra na análise de consistência."
-        )
+    st.info(
+        f"O {clube_selecionado} não possui pelo menos "
+        "5 temporadas no período analisado e, por isso, "
+        "não entra na análise de consistência."
+    )
 
 
 st.plotly_chart(

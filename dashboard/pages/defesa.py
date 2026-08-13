@@ -285,6 +285,46 @@ finalizacoes_alvo_concedidas_por_jogo = float(
     ]
 )
 
+
+# --------------------------------------------------
+# Cards
+# --------------------------------------------------
+
+col1, col2, col3, col4 = st.columns(4)
+
+
+with col1:
+
+    st.metric(
+        label="Gols sofridos",
+        value=f"{total_gols_sofridos:,}".replace(",", ".")
+    )
+
+
+with col2:
+
+    st.metric(
+        label="Gols sofridos por jogo",
+        value=f"{gols_sofridos_por_jogo:.2f}"
+    )
+
+
+with col3:
+
+    st.metric(
+        label="Finalizações concedidas por jogo",
+        value=f"{finalizacoes_concedidas_por_jogo:.2f}"
+    )
+
+
+with col4:
+
+    st.metric(
+        label="Finalizações no alvo concedidas por jogo",
+        value=f"{finalizacoes_alvo_concedidas_por_jogo:.2f}"
+    )
+
+
 # ==================================================
 # RANKING DEFENSIVO
 # ==================================================
@@ -419,6 +459,26 @@ ranking_defensivo = executar_query(
 
 
 # --------------------------------------------------
+# Garantir valores numéricos
+# --------------------------------------------------
+
+colunas_ranking_numericas = [
+    "gols_sofridos_por_jogo",
+    "finalizacoes_concedidas_por_jogo",
+    "finalizacoes_alvo_concedidas_por_jogo",
+    "clean_sheets"
+]
+
+
+for coluna in colunas_ranking_numericas:
+
+    ranking_defensivo[coluna] = (
+        ranking_defensivo[coluna]
+        .astype(float)
+    )
+
+
+# --------------------------------------------------
 # Escolha da métrica
 # --------------------------------------------------
 
@@ -533,12 +593,13 @@ if (
 
 
 # --------------------------------------------------
-# Ordenar para o gráfico horizontal
+# Ordenar para gráfico horizontal
 # --------------------------------------------------
 
 if menor_e_melhor:
 
-    # Menores valores devem aparecer no topo
+    # Melhor = menor.
+    # Para barra horizontal, o melhor ficará no topo.
     top10_defensivo = (
         top10_defensivo
         .sort_values(
@@ -550,7 +611,8 @@ if menor_e_melhor:
 
 else:
 
-    # Maiores valores devem aparecer no topo
+    # Melhor = maior.
+    # Para barra horizontal, o melhor ficará no topo.
     top10_defensivo = (
         top10_defensivo
         .sort_values(
@@ -596,6 +658,16 @@ top10_defensivo["destaque"] = (
         if clube == clube_selecionado
         else "Demais clubes"
     )
+)
+
+
+# --------------------------------------------------
+# Preservar a ordem real do ranking
+# --------------------------------------------------
+
+ordem_clubes = (
+    top10_defensivo["clube"]
+    .tolist()
 )
 
 
@@ -651,6 +723,11 @@ fig_ranking_defensivo.update_layout(
 
     showlegend=(
         clube_selecionado != "Todos"
+    ),
+
+    yaxis=dict(
+        categoryorder="array",
+        categoryarray=ordem_clubes
     )
 )
 
@@ -660,43 +737,6 @@ st.plotly_chart(
     width="stretch"
 )
 
-# --------------------------------------------------
-# Cards
-# --------------------------------------------------
-
-col1, col2, col3, col4 = st.columns(4)
-
-
-with col1:
-
-    st.metric(
-        label="Gols sofridos",
-        value=f"{total_gols_sofridos:,}".replace(",", ".")
-    )
-
-
-with col2:
-
-    st.metric(
-        label="Gols sofridos por jogo",
-        value=f"{gols_sofridos_por_jogo:.2f}"
-    )
-
-
-with col3:
-
-    st.metric(
-        label="Finalizações concedidas por jogo",
-        value=f"{finalizacoes_concedidas_por_jogo:.2f}"
-    )
-
-
-with col4:
-
-    st.metric(
-        label="Finalizações no alvo concedidas por jogo",
-        value=f"{finalizacoes_alvo_concedidas_por_jogo:.2f}"
-    )
 
 # ==================================================
 # FINALIZAÇÕES CONCEDIDAS X GOLS SOFRIDOS
@@ -742,6 +782,7 @@ media_finalizacoes_concedidas = (
     ].mean()
 )
 
+
 media_gols_sofridos = (
     scatter_defensivo[
         "gols_sofridos_por_jogo"
@@ -775,8 +816,11 @@ fig_scatter_defensivo = px.scatter(
     },
 
     color_discrete_map={
-        "Clube selecionado": "#FFD700",
-        "Demais clubes": "#7EC8F5"
+        "Clube selecionado":
+            "#FFD700",
+
+        "Demais clubes":
+            "#7EC8F5"
     },
 
     labels={
@@ -878,6 +922,7 @@ st.plotly_chart(
     width="stretch"
 )
 
+
 # ==================================================
 # FINALIZAÇÕES NO ALVO CONCEDIDAS X GOLS SOFRIDOS
 # ==================================================
@@ -898,7 +943,9 @@ st.write(
 # Preparar dados
 # --------------------------------------------------
 
-scatter_alvo_defensivo = ranking_defensivo.copy()
+scatter_alvo_defensivo = (
+    ranking_defensivo.copy()
+)
 
 
 scatter_alvo_defensivo["destaque"] = (
@@ -921,6 +968,7 @@ media_alvo_concedidas = (
         "finalizacoes_alvo_concedidas_por_jogo"
     ].mean()
 )
+
 
 media_gols_sofridos_alvo = (
     scatter_alvo_defensivo[
@@ -955,8 +1003,11 @@ fig_scatter_alvo_defensivo = px.scatter(
     },
 
     color_discrete_map={
-        "Clube selecionado": "#FFD700",
-        "Demais clubes": "#7EC8F5"
+        "Clube selecionado":
+            "#FFD700",
+
+        "Demais clubes":
+            "#7EC8F5"
     },
 
     labels={
@@ -1024,10 +1075,12 @@ fig_scatter_alvo_defensivo.update_layout(
 
 if clube_selecionado != "Todos":
 
-    clube_destaque_alvo = scatter_alvo_defensivo[
-        scatter_alvo_defensivo["clube"]
-        == clube_selecionado
-    ]
+    clube_destaque_alvo = (
+        scatter_alvo_defensivo[
+            scatter_alvo_defensivo["clube"]
+            == clube_selecionado
+        ]
+    )
 
 
     if not clube_destaque_alvo.empty:
@@ -1057,3 +1110,373 @@ st.plotly_chart(
     fig_scatter_alvo_defensivo,
     width="stretch"
 )
+
+
+# ==================================================
+# EVOLUÇÃO DEFENSIVA DO CLUBE
+# ==================================================
+
+if club_id is not None:
+
+    st.divider()
+
+    st.subheader(
+        f"Evolução defensiva do {clube_selecionado}"
+    )
+
+    st.write(
+        "Acompanhe a evolução dos principais indicadores "
+        "defensivos do clube ao longo das temporadas."
+    )
+
+
+    # --------------------------------------------------
+    # Consulta histórica
+    # --------------------------------------------------
+
+    query_evolucao_defensiva = f"""
+    WITH jogos_clube AS (
+
+        SELECT
+            season_id,
+
+            away_goals AS gols_sofridos,
+
+            away_shots AS finalizacoes_concedidas,
+
+            away_shots_on_target
+                AS finalizacoes_alvo_concedidas,
+
+            CASE
+                WHEN away_goals = 0 THEN 1
+                ELSE 0
+            END AS clean_sheet
+
+        FROM matches
+
+        WHERE home_team_id = {club_id}
+
+
+        UNION ALL
+
+
+        SELECT
+            season_id,
+
+            home_goals AS gols_sofridos,
+
+            home_shots AS finalizacoes_concedidas,
+
+            home_shots_on_target
+                AS finalizacoes_alvo_concedidas,
+
+            CASE
+                WHEN home_goals = 0 THEN 1
+                ELSE 0
+            END AS clean_sheet
+
+        FROM matches
+
+        WHERE away_team_id = {club_id}
+    )
+
+    SELECT
+        s.season,
+
+        COUNT(*) AS jogos,
+
+        ROUND(
+            AVG(j.gols_sofridos)::numeric,
+            2
+        ) AS gols_sofridos_por_jogo,
+
+        ROUND(
+            AVG(j.finalizacoes_concedidas)::numeric,
+            2
+        ) AS finalizacoes_concedidas_por_jogo,
+
+        ROUND(
+            AVG(j.finalizacoes_alvo_concedidas)::numeric,
+            2
+        ) AS finalizacoes_alvo_concedidas_por_jogo,
+
+        ROUND(
+            (
+                SUM(j.clean_sheet)::numeric
+                / COUNT(*)
+            ) * 100,
+            2
+        ) AS clean_sheets
+
+    FROM jogos_clube j
+
+    JOIN seasons s
+        ON s.id = j.season_id
+
+    GROUP BY
+        s.id,
+        s.season
+
+    ORDER BY
+        s.season;
+    """
+
+
+    evolucao_defensiva = executar_query(
+        query_evolucao_defensiva
+    )
+
+
+    # --------------------------------------------------
+    # Garantir valores numéricos
+    # --------------------------------------------------
+
+    colunas_numericas = [
+        "gols_sofridos_por_jogo",
+        "finalizacoes_concedidas_por_jogo",
+        "finalizacoes_alvo_concedidas_por_jogo",
+        "clean_sheets"
+    ]
+
+
+    for coluna in colunas_numericas:
+
+        evolucao_defensiva[coluna] = (
+            evolucao_defensiva[coluna]
+            .astype(float)
+        )
+
+
+    # ==================================================
+    # GRÁFICO 1
+    # GOLS SOFRIDOS POR JOGO
+    # ==================================================
+
+    st.markdown(
+        "#### Gols sofridos por jogo"
+    )
+
+
+    fig_gols_sofridos = px.line(
+        evolucao_defensiva,
+
+        x="season",
+
+        y="gols_sofridos_por_jogo",
+
+        markers=True,
+
+        text="gols_sofridos_por_jogo",
+
+        labels={
+            "season":
+                "Temporada",
+
+            "gols_sofridos_por_jogo":
+                "Gols sofridos por jogo"
+        }
+    )
+
+
+    fig_gols_sofridos.update_traces(
+        textposition="top center"
+    )
+
+
+    fig_gols_sofridos.update_layout(
+        xaxis_title="Temporada",
+
+        yaxis_title="Gols sofridos por jogo",
+
+        hovermode="x unified"
+    )
+
+
+    # --------------------------------------------------
+    # Destacar temporada selecionada
+    # --------------------------------------------------
+
+    if temporada_selecionada != "Todas":
+
+        destaque_defesa = (
+            evolucao_defensiva[
+                evolucao_defensiva["season"]
+                == temporada_selecionada
+            ]
+        )
+
+
+        if not destaque_defesa.empty:
+
+            fig_gols_sofridos.add_scatter(
+                x=destaque_defesa[
+                    "season"
+                ],
+
+                y=destaque_defesa[
+                    "gols_sofridos_por_jogo"
+                ],
+
+                mode="markers",
+
+                marker=dict(
+                    size=16,
+
+                    symbol="circle-open",
+
+                    line=dict(
+                        width=3
+                    )
+                ),
+
+                showlegend=False,
+
+                hoverinfo="skip"
+            )
+
+
+    st.plotly_chart(
+        fig_gols_sofridos,
+        width="stretch"
+    )
+
+
+    # ==================================================
+    # GRÁFICO 2
+    # FINALIZAÇÕES CONCEDIDAS
+    # ==================================================
+
+    st.markdown(
+        "#### Finalizações concedidas"
+    )
+
+
+    evolucao_finalizacoes_defesa = (
+        evolucao_defensiva[
+            [
+                "season",
+                "finalizacoes_concedidas_por_jogo",
+                "finalizacoes_alvo_concedidas_por_jogo"
+            ]
+        ]
+        .melt(
+            id_vars="season",
+
+            var_name="indicador",
+
+            value_name="valor"
+        )
+    )
+
+
+    nomes_indicadores_defesa = {
+        "finalizacoes_concedidas_por_jogo":
+            "Finalizações concedidas por jogo",
+
+        "finalizacoes_alvo_concedidas_por_jogo":
+            "Finalizações no alvo concedidas por jogo"
+    }
+
+
+    evolucao_finalizacoes_defesa[
+        "indicador"
+    ] = (
+        evolucao_finalizacoes_defesa[
+            "indicador"
+        ]
+        .map(
+            nomes_indicadores_defesa
+        )
+    )
+
+
+    fig_finalizacoes_defesa = px.line(
+        evolucao_finalizacoes_defesa,
+
+        x="season",
+
+        y="valor",
+
+        color="indicador",
+
+        markers=True,
+
+        labels={
+            "season":
+                "Temporada",
+
+            "valor":
+                "Média por jogo",
+
+            "indicador":
+                ""
+        }
+    )
+
+
+    fig_finalizacoes_defesa.update_layout(
+        xaxis_title="Temporada",
+
+        yaxis_title="Média por jogo",
+
+        hovermode="x unified",
+
+        legend_title_text=""
+    )
+
+
+    st.plotly_chart(
+        fig_finalizacoes_defesa,
+        width="stretch"
+    )
+
+
+    # ==================================================
+    # GRÁFICO 3
+    # CLEAN SHEETS
+    # ==================================================
+
+    st.markdown(
+        "#### Clean sheets por temporada"
+    )
+
+
+    fig_clean_sheets = px.bar(
+        evolucao_defensiva,
+
+        x="season",
+
+        y="clean_sheets",
+
+        text="clean_sheets",
+
+        labels={
+            "season":
+                "Temporada",
+
+            "clean_sheets":
+                "Clean sheets (%)"
+        }
+    )
+
+
+    fig_clean_sheets.update_traces(
+        texttemplate="%{text:.2f}%",
+
+        textposition="outside"
+    )
+
+
+    fig_clean_sheets.update_layout(
+        xaxis_title="Temporada",
+
+        yaxis_title="Clean sheets (%)",
+
+        showlegend=False
+    )
+
+
+    st.plotly_chart(
+        fig_clean_sheets,
+        width="stretch"
+    )

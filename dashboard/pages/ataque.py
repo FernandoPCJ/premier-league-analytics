@@ -29,7 +29,9 @@ FROM seasons
 ORDER BY season;
 """
 
-temporadas_df = executar_query(query_temporadas)
+temporadas_df = executar_query(
+    query_temporadas
+)
 
 opcoes_temporadas = (
     ["Todas"]
@@ -84,6 +86,7 @@ else:
     SELECT DISTINCT
         t.id,
         t.name
+
     FROM teams t
 
     JOIN (
@@ -99,6 +102,7 @@ else:
         FROM matches
         WHERE season_id = {season_id}
     ) participantes
+
         ON participantes.team_id = t.id
 
     ORDER BY
@@ -142,29 +146,51 @@ else:
 
 
 # ==================================================
-# BASE OFENSIVA
+# FILTROS SQL
 # ==================================================
 
-filtro_temporada = ""
+if season_id is None:
 
-if season_id is not None:
+    filtro_temporada = ""
+
+else:
 
     filtro_temporada = (
         f"WHERE season_id = {season_id}"
     )
 
 
+if club_id is None:
+
+    filtro_clube = ""
+
+else:
+
+    filtro_clube = (
+        f"WHERE team_id = {club_id}"
+    )
+
+
+# ==================================================
+# BASE OFENSIVA
+# ==================================================
+
 query_ofensiva = f"""
 WITH jogos_ofensivos AS (
 
     SELECT
         season_id,
+
         home_team_id AS team_id,
+
         home_goals AS gols,
+
         home_shots AS finalizacoes,
+
         home_shots_on_target AS finalizacoes_alvo
 
     FROM matches
+
     {filtro_temporada}
 
 
@@ -173,12 +199,17 @@ WITH jogos_ofensivos AS (
 
     SELECT
         season_id,
+
         away_team_id AS team_id,
+
         away_goals AS gols,
+
         away_shots AS finalizacoes,
+
         away_shots_on_target AS finalizacoes_alvo
 
     FROM matches
+
     {filtro_temporada}
 )
 
@@ -203,22 +234,9 @@ SELECT
     ) AS finalizacoes_alvo_por_jogo
 
 FROM jogos_ofensivos
+
+{filtro_clube};
 """
-
-
-# --------------------------------------------------
-# Aplicar filtro de clube
-# --------------------------------------------------
-
-if club_id is not None:
-
-    query_ofensiva = query_ofensiva.replace(
-        "FROM jogos_ofensivos\n",
-        (
-            "FROM jogos_ofensivos\n"
-            f"WHERE team_id = {club_id}\n"
-        )
-    )
 
 
 dados_ofensivos = executar_query(
@@ -231,8 +249,12 @@ dados_ofensivos = executar_query(
 # ==================================================
 
 total_gols = int(
-    dados_ofensivos.loc[0, "gols"]
+    dados_ofensivos.loc[
+        0,
+        "gols"
+    ]
 )
+
 
 gols_por_jogo = float(
     dados_ofensivos.loc[
@@ -241,12 +263,14 @@ gols_por_jogo = float(
     ]
 )
 
+
 finalizacoes_por_jogo = float(
     dados_ofensivos.loc[
         0,
         "finalizacoes_por_jogo"
     ]
 )
+
 
 finalizacoes_alvo_por_jogo = float(
     dados_ofensivos.loc[
@@ -255,6 +279,10 @@ finalizacoes_alvo_por_jogo = float(
     ]
 )
 
+
+# --------------------------------------------------
+# Cards
+# --------------------------------------------------
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -290,6 +318,7 @@ with col4:
         value=f"{finalizacoes_alvo_por_jogo:.2f}"
     )
 
+
 # ==================================================
 # RANKING OFENSIVO
 # ==================================================
@@ -312,7 +341,7 @@ else:
 
 
 # --------------------------------------------------
-# Filtro de temporada
+# Filtro do ranking
 # --------------------------------------------------
 
 if season_id is None:
@@ -327,7 +356,7 @@ else:
 
 
 # --------------------------------------------------
-# Consulta do ranking ofensivo
+# Consulta
 # --------------------------------------------------
 
 query_ranking_ofensivo = f"""
@@ -335,8 +364,11 @@ WITH jogos_ofensivos AS (
 
     SELECT
         home_team_id AS team_id,
+
         home_goals AS gols,
+
         home_shots AS finalizacoes,
+
         home_shots_on_target AS finalizacoes_alvo
 
     FROM matches
@@ -349,8 +381,11 @@ WITH jogos_ofensivos AS (
 
     SELECT
         away_team_id AS team_id,
+
         away_goals AS gols,
+
         away_shots AS finalizacoes,
+
         away_shots_on_target AS finalizacoes_alvo
 
     FROM matches
@@ -383,7 +418,10 @@ SELECT
     ROUND(
         (
             SUM(j.gols)::numeric
-            / NULLIF(SUM(j.finalizacoes), 0)
+            / NULLIF(
+                SUM(j.finalizacoes),
+                0
+            )
         ) * 100,
         2
     ) AS conversao
@@ -405,7 +443,27 @@ ranking_ofensivo = executar_query(
 
 
 # --------------------------------------------------
-# Escolha da métrica
+# Garantir tipos numéricos
+# --------------------------------------------------
+
+colunas_ranking_numericas = [
+    "gols_por_jogo",
+    "finalizacoes_por_jogo",
+    "finalizacoes_alvo_por_jogo",
+    "conversao"
+]
+
+
+for coluna in colunas_ranking_numericas:
+
+    ranking_ofensivo[coluna] = (
+        ranking_ofensivo[coluna]
+        .astype(float)
+    )
+
+
+# --------------------------------------------------
+# Métrica
 # --------------------------------------------------
 
 metrica_ofensiva = st.selectbox(
@@ -421,6 +479,7 @@ metrica_ofensiva = st.selectbox(
 
 
 mapa_metricas_ofensivas = {
+
     "Gols por jogo":
         "gols_por_jogo",
 
@@ -438,6 +497,11 @@ mapa_metricas_ofensivas = {
 coluna_ofensiva = mapa_metricas_ofensivas[
     metrica_ofensiva
 ]
+
+
+st.caption(
+    "Valores maiores indicam melhor desempenho ofensivo."
+)
 
 
 # --------------------------------------------------
@@ -462,7 +526,7 @@ top10_ofensivo = (
 
 
 # --------------------------------------------------
-# Garantir que o clube selecionado apareça
+# Garantir clube selecionado
 # --------------------------------------------------
 
 if (
@@ -471,10 +535,12 @@ if (
     not in top10_ofensivo["clube"].values
 ):
 
-    clube_fora_top10 = ranking_ordenado[
-        ranking_ordenado["clube"]
-        == clube_selecionado
-    ]
+    clube_fora_top10 = (
+        ranking_ordenado[
+            ranking_ordenado["clube"]
+            == clube_selecionado
+        ]
+    )
 
 
     if not clube_fora_top10.empty:
@@ -496,7 +562,7 @@ if (
 
 
 # --------------------------------------------------
-# Ordenação para gráfico horizontal
+# Ordenar para gráfico horizontal
 # --------------------------------------------------
 
 top10_ofensivo = (
@@ -510,30 +576,36 @@ top10_ofensivo = (
 
 
 # --------------------------------------------------
-# Texto das barras
+# Texto
 # --------------------------------------------------
 
 if metrica_ofensiva == "Conversão de finalizações":
 
     top10_ofensivo["texto"] = (
-        top10_ofensivo[coluna_ofensiva]
+        top10_ofensivo[
+            coluna_ofensiva
+        ]
         .map(
-            lambda x: f"{x:.2f}%"
+            lambda x:
+            f"{x:.2f}%"
         )
     )
 
 else:
 
     top10_ofensivo["texto"] = (
-        top10_ofensivo[coluna_ofensiva]
+        top10_ofensivo[
+            coluna_ofensiva
+        ]
         .map(
-            lambda x: f"{x:.2f}"
+            lambda x:
+            f"{x:.2f}"
         )
     )
 
 
 # --------------------------------------------------
-# Destaque do clube selecionado
+# Destaque
 # --------------------------------------------------
 
 top10_ofensivo["destaque"] = (
@@ -544,6 +616,18 @@ top10_ofensivo["destaque"] = (
         if clube == clube_selecionado
         else "Demais clubes"
     )
+)
+
+
+# --------------------------------------------------
+# Preservar posição real do ranking
+# --------------------------------------------------
+
+ordem_clubes_ofensivo = (
+    top10_ofensivo[
+        "clube"
+    ]
+    .tolist()
 )
 
 
@@ -599,6 +683,11 @@ fig_ranking_ofensivo.update_layout(
 
     showlegend=(
         clube_selecionado != "Todos"
+    ),
+
+    yaxis=dict(
+        categoryorder="array",
+        categoryarray=ordem_clubes_ofensivo
     )
 )
 
@@ -607,6 +696,7 @@ st.plotly_chart(
     fig_ranking_ofensivo,
     width="stretch"
 )
+
 
 # ==================================================
 # FINALIZAÇÕES X GOLS POR JOGO
@@ -619,16 +709,14 @@ st.subheader(
 )
 
 st.write(
-    "Compare o volume de finalizações dos clubes com a média "
-    "de gols marcados por partida."
+    "Compare o volume de finalizações dos clubes "
+    "com a média de gols marcados por partida."
 )
 
 
-# --------------------------------------------------
-# Preparar dados
-# --------------------------------------------------
-
-scatter_ofensivo = ranking_ofensivo.copy()
+scatter_ofensivo = (
+    ranking_ofensivo.copy()
+)
 
 
 scatter_ofensivo["destaque"] = (
@@ -643,19 +731,22 @@ scatter_ofensivo["destaque"] = (
 
 
 # --------------------------------------------------
-# Médias para referência
+# Médias
 # --------------------------------------------------
 
 media_finalizacoes = (
     scatter_ofensivo[
         "finalizacoes_por_jogo"
-    ].mean()
+    ]
+    .mean()
 )
+
 
 media_gols = (
     scatter_ofensivo[
         "gols_por_jogo"
-    ].mean()
+    ]
+    .mean()
 )
 
 
@@ -685,8 +776,11 @@ fig_scatter_ofensivo = px.scatter(
     },
 
     color_discrete_map={
-        "Clube selecionado": "#FFD700",
-        "Demais clubes": "#7EC8F5"
+        "Clube selecionado":
+            "#FFD700",
+
+        "Demais clubes":
+            "#7EC8F5"
     },
 
     labels={
@@ -715,22 +809,24 @@ fig_scatter_ofensivo.update_traces(
 )
 
 
-# --------------------------------------------------
-# Linhas de referência
-# --------------------------------------------------
-
 fig_scatter_ofensivo.add_vline(
     x=media_finalizacoes,
+
     line_dash="dash",
+
     annotation_text="Média de finalizações",
+
     annotation_position="top"
 )
 
 
 fig_scatter_ofensivo.add_hline(
     y=media_gols,
+
     line_dash="dash",
+
     annotation_text="Média de gols",
+
     annotation_position="right"
 )
 
@@ -749,15 +845,17 @@ fig_scatter_ofensivo.update_layout(
 
 
 # --------------------------------------------------
-# Nome do clube selecionado
+# Destacar clube
 # --------------------------------------------------
 
 if clube_selecionado != "Todos":
 
-    clube_destaque = scatter_ofensivo[
-        scatter_ofensivo["clube"]
-        == clube_selecionado
-    ]
+    clube_destaque = (
+        scatter_ofensivo[
+            scatter_ofensivo["clube"]
+            == clube_selecionado
+        ]
+    )
 
 
     if not clube_destaque.empty:
@@ -787,6 +885,8 @@ st.plotly_chart(
     fig_scatter_ofensivo,
     width="stretch"
 )
+
+
 # ==================================================
 # FINALIZAÇÕES NO ALVO X GOLS POR JOGO
 # ==================================================
@@ -803,11 +903,9 @@ st.write(
 )
 
 
-# --------------------------------------------------
-# Preparar dados
-# --------------------------------------------------
-
-scatter_alvo = ranking_ofensivo.copy()
+scatter_alvo = (
+    ranking_ofensivo.copy()
+)
 
 
 scatter_alvo["destaque"] = (
@@ -822,19 +920,22 @@ scatter_alvo["destaque"] = (
 
 
 # --------------------------------------------------
-# Médias para referência
+# Médias
 # --------------------------------------------------
 
 media_finalizacoes_alvo = (
     scatter_alvo[
         "finalizacoes_alvo_por_jogo"
-    ].mean()
+    ]
+    .mean()
 )
+
 
 media_gols_alvo = (
     scatter_alvo[
         "gols_por_jogo"
-    ].mean()
+    ]
+    .mean()
 )
 
 
@@ -864,8 +965,11 @@ fig_scatter_alvo = px.scatter(
     },
 
     color_discrete_map={
-        "Clube selecionado": "#FFD700",
-        "Demais clubes": "#7EC8F5"
+        "Clube selecionado":
+            "#FFD700",
+
+        "Demais clubes":
+            "#7EC8F5"
     },
 
     labels={
@@ -894,22 +998,24 @@ fig_scatter_alvo.update_traces(
 )
 
 
-# --------------------------------------------------
-# Linhas de referência
-# --------------------------------------------------
-
 fig_scatter_alvo.add_vline(
     x=media_finalizacoes_alvo,
+
     line_dash="dash",
+
     annotation_text="Média de finalizações no alvo",
+
     annotation_position="top"
 )
 
 
 fig_scatter_alvo.add_hline(
     y=media_gols_alvo,
+
     line_dash="dash",
+
     annotation_text="Média de gols",
+
     annotation_position="right"
 )
 
@@ -928,15 +1034,17 @@ fig_scatter_alvo.update_layout(
 
 
 # --------------------------------------------------
-# Nome do clube selecionado
+# Destacar clube
 # --------------------------------------------------
 
 if clube_selecionado != "Todos":
 
-    clube_destaque_alvo = scatter_alvo[
-        scatter_alvo["clube"]
-        == clube_selecionado
-    ]
+    clube_destaque_alvo = (
+        scatter_alvo[
+            scatter_alvo["clube"]
+            == clube_selecionado
+        ]
+    )
 
 
     if not clube_destaque_alvo.empty:
@@ -967,6 +1075,7 @@ st.plotly_chart(
     width="stretch"
 )
 
+
 # ==================================================
 # EVOLUÇÃO OFENSIVA DO CLUBE
 # ==================================================
@@ -986,7 +1095,7 @@ if club_id is not None:
 
 
     # --------------------------------------------------
-    # Consulta histórica do clube
+    # Consulta histórica
     # --------------------------------------------------
 
     query_evolucao_ofensiva = f"""
@@ -994,8 +1103,11 @@ if club_id is not None:
 
         SELECT
             season_id,
+
             home_goals AS gols,
+
             home_shots AS finalizacoes,
+
             home_shots_on_target AS finalizacoes_alvo
 
         FROM matches
@@ -1008,8 +1120,11 @@ if club_id is not None:
 
         SELECT
             season_id,
+
             away_goals AS gols,
+
             away_shots AS finalizacoes,
+
             away_shots_on_target AS finalizacoes_alvo
 
         FROM matches
@@ -1021,6 +1136,10 @@ if club_id is not None:
         s.season,
 
         COUNT(*) AS jogos,
+
+        SUM(j.gols) AS gols,
+
+        SUM(j.finalizacoes) AS finalizacoes,
 
         ROUND(
             AVG(j.gols)::numeric,
@@ -1035,7 +1154,18 @@ if club_id is not None:
         ROUND(
             AVG(j.finalizacoes_alvo)::numeric,
             2
-        ) AS finalizacoes_alvo_por_jogo
+        ) AS finalizacoes_alvo_por_jogo,
+
+        ROUND(
+            (
+                SUM(j.gols)::numeric
+                / NULLIF(
+                    SUM(j.finalizacoes),
+                    0
+                )
+            ) * 100,
+            2
+        ) AS conversao
 
     FROM jogos_clube j
 
@@ -1056,9 +1186,35 @@ if club_id is not None:
     )
 
 
+    # --------------------------------------------------
+    # Garantir tipos numéricos
+    # --------------------------------------------------
+
+    colunas_evolucao_numericas = [
+        "gols_por_jogo",
+        "finalizacoes_por_jogo",
+        "finalizacoes_alvo_por_jogo",
+        "conversao"
+    ]
+
+
+    for coluna in colunas_evolucao_numericas:
+
+        evolucao_ofensiva[coluna] = (
+            evolucao_ofensiva[coluna]
+            .astype(float)
+        )
+
+
     # ==================================================
-    # GRÁFICO 1: GOLS POR JOGO
+    # GRÁFICO 1
+    # GOLS POR JOGO
     # ==================================================
+
+    st.markdown(
+        "#### Gols por jogo"
+    )
+
 
     fig_gols_clube = px.line(
         evolucao_ofensiva,
@@ -1096,21 +1252,25 @@ if club_id is not None:
 
 
     # --------------------------------------------------
-    # Destacar temporada selecionada
+    # Destacar temporada
     # --------------------------------------------------
 
     if temporada_selecionada != "Todas":
 
-        destaque_gols = evolucao_ofensiva[
-            evolucao_ofensiva["season"]
-            == temporada_selecionada
-        ]
+        destaque_gols = (
+            evolucao_ofensiva[
+                evolucao_ofensiva["season"]
+                == temporada_selecionada
+            ]
+        )
 
 
         if not destaque_gols.empty:
 
             fig_gols_clube.add_scatter(
-                x=destaque_gols["season"],
+                x=destaque_gols[
+                    "season"
+                ],
 
                 y=destaque_gols[
                     "gols_por_jogo"
@@ -1120,8 +1280,12 @@ if club_id is not None:
 
                 marker=dict(
                     size=16,
+
                     symbol="circle-open",
-                    line=dict(width=3)
+
+                    line=dict(
+                        width=3
+                    )
                 ),
 
                 showlegend=False,
@@ -1137,8 +1301,14 @@ if club_id is not None:
 
 
     # ==================================================
-    # GRÁFICO 2: FINALIZAÇÕES
+    # GRÁFICO 2
+    # FINALIZAÇÕES
     # ==================================================
+
+    st.markdown(
+        "#### Finalizações"
+    )
+
 
     evolucao_finalizacoes = (
         evolucao_ofensiva[
@@ -1167,9 +1337,15 @@ if club_id is not None:
     }
 
 
-    evolucao_finalizacoes["indicador"] = (
-        evolucao_finalizacoes["indicador"]
-        .map(nomes_indicadores)
+    evolucao_finalizacoes[
+        "indicador"
+    ] = (
+        evolucao_finalizacoes[
+            "indicador"
+        ]
+        .map(
+            nomes_indicadores
+        )
     )
 
 
@@ -1208,7 +1384,101 @@ if club_id is not None:
     )
 
 
+    # --------------------------------------------------
+    # Destacar temporada
+    # --------------------------------------------------
+
+    if temporada_selecionada != "Todas":
+
+        destaque_finalizacoes = (
+            evolucao_finalizacoes[
+                evolucao_finalizacoes["season"]
+                == temporada_selecionada
+            ]
+        )
+
+
+        if not destaque_finalizacoes.empty:
+
+            fig_finalizacoes_clube.add_scatter(
+                x=destaque_finalizacoes[
+                    "season"
+                ],
+
+                y=destaque_finalizacoes[
+                    "valor"
+                ],
+
+                mode="markers",
+
+                marker=dict(
+                    size=14,
+
+                    symbol="circle-open",
+
+                    line=dict(
+                        width=3
+                    )
+                ),
+
+                showlegend=False,
+
+                hoverinfo="skip"
+            )
+
+
     st.plotly_chart(
         fig_finalizacoes_clube,
+        width="stretch"
+    )
+
+
+    # ==================================================
+    # GRÁFICO 3
+    # CONVERSÃO DE FINALIZAÇÕES
+    # ==================================================
+
+    st.markdown(
+        "#### Conversão de finalizações"
+    )
+
+
+    fig_conversao_clube = px.bar(
+        evolucao_ofensiva,
+
+        x="season",
+
+        y="conversao",
+
+        text="conversao",
+
+        labels={
+            "season":
+                "Temporada",
+
+            "conversao":
+                "Conversão de finalizações (%)"
+        }
+    )
+
+
+    fig_conversao_clube.update_traces(
+        texttemplate="%{text:.2f}%",
+
+        textposition="outside"
+    )
+
+
+    fig_conversao_clube.update_layout(
+        xaxis_title="Temporada",
+
+        yaxis_title="Conversão de finalizações (%)",
+
+        showlegend=False
+    )
+
+
+    st.plotly_chart(
+        fig_conversao_clube,
         width="stretch"
     )

@@ -292,6 +292,46 @@ cartoes_por_jogo = float(
     ]
 )
 
+
+# --------------------------------------------------
+# Cards
+# --------------------------------------------------
+
+col1, col2, col3, col4 = st.columns(4)
+
+
+with col1:
+
+    st.metric(
+        label="Faltas por jogo",
+        value=f"{faltas_por_jogo:.2f}"
+    )
+
+
+with col2:
+
+    st.metric(
+        label="Cartões amarelos por jogo",
+        value=f"{amarelos_por_jogo:.2f}"
+    )
+
+
+with col3:
+
+    st.metric(
+        label="Cartões vermelhos",
+        value=total_vermelhos
+    )
+
+
+with col4:
+
+    st.metric(
+        label="Cartões por jogo",
+        value=f"{cartoes_por_jogo:.2f}"
+    )
+
+
 # ==================================================
 # RANKING DISCIPLINAR
 # ==================================================
@@ -417,6 +457,26 @@ ranking_disciplina = executar_query(
 
 
 # --------------------------------------------------
+# Garantir valores numéricos
+# --------------------------------------------------
+
+colunas_ranking_numericas = [
+    "faltas_por_jogo",
+    "amarelos_por_jogo",
+    "cartoes_por_jogo",
+    "vermelhos_por_100_jogos"
+]
+
+
+for coluna in colunas_ranking_numericas:
+
+    ranking_disciplina[coluna] = (
+        ranking_disciplina[coluna]
+        .astype(float)
+    )
+
+
+# --------------------------------------------------
 # Escolha da métrica
 # --------------------------------------------------
 
@@ -531,26 +591,12 @@ top10_disciplina = (
 # Texto das barras
 # --------------------------------------------------
 
-if (
-    metrica_disciplina
-    == "Cartões vermelhos a cada 100 jogos"
-):
-
-    top10_disciplina["texto"] = (
-        top10_disciplina[coluna_disciplina]
-        .map(
-            lambda x: f"{x:.2f}"
-        )
+top10_disciplina["texto"] = (
+    top10_disciplina[coluna_disciplina]
+    .map(
+        lambda x: f"{x:.2f}"
     )
-
-else:
-
-    top10_disciplina["texto"] = (
-        top10_disciplina[coluna_disciplina]
-        .map(
-            lambda x: f"{x:.2f}"
-        )
-    )
+)
 
 
 # --------------------------------------------------
@@ -565,6 +611,16 @@ top10_disciplina["destaque"] = (
         if clube == clube_selecionado
         else "Demais clubes"
     )
+)
+
+
+# --------------------------------------------------
+# Preservar a posição real do ranking
+# --------------------------------------------------
+
+ordem_clubes_disciplina = (
+    top10_disciplina["clube"]
+    .tolist()
 )
 
 
@@ -620,6 +676,11 @@ fig_ranking_disciplina.update_layout(
 
     showlegend=(
         clube_selecionado != "Todos"
+    ),
+
+    yaxis=dict(
+        categoryorder="array",
+        categoryarray=ordem_clubes_disciplina
     )
 )
 
@@ -629,44 +690,6 @@ st.plotly_chart(
     width="stretch"
 )
 
-
-# --------------------------------------------------
-# Cards
-# --------------------------------------------------
-
-col1, col2, col3, col4 = st.columns(4)
-
-
-with col1:
-
-    st.metric(
-        label="Faltas por jogo",
-        value=f"{faltas_por_jogo:.2f}"
-    )
-
-
-with col2:
-
-    st.metric(
-        label="Cartões amarelos por jogo",
-        value=f"{amarelos_por_jogo:.2f}"
-    )
-
-
-with col3:
-
-    st.metric(
-        label="Cartões vermelhos",
-        value=total_vermelhos
-    )
-
-
-with col4:
-
-    st.metric(
-        label="Cartões por jogo",
-        value=f"{cartoes_por_jogo:.2f}"
-    )
 
 # ==================================================
 # FALTAS X CARTÕES AMARELOS
@@ -712,6 +735,7 @@ media_faltas = (
     ].mean()
 )
 
+
 media_amarelos = (
     scatter_disciplina[
         "amarelos_por_jogo"
@@ -747,8 +771,11 @@ fig_scatter_disciplina = px.scatter(
     },
 
     color_discrete_map={
-        "Clube selecionado": "#FFD700",
-        "Demais clubes": "#7EC8F5"
+        "Clube selecionado":
+            "#FFD700",
+
+        "Demais clubes":
+            "#7EC8F5"
     },
 
     labels={
@@ -849,6 +876,7 @@ st.plotly_chart(
     fig_scatter_disciplina,
     width="stretch"
 )
+
 
 # ==================================================
 # CARTÕES VERMELHOS A CADA 100 JOGOS
@@ -965,6 +993,16 @@ top10_vermelhos["destaque"] = (
 
 
 # --------------------------------------------------
+# Preservar a ordem real
+# --------------------------------------------------
+
+ordem_clubes_vermelhos = (
+    top10_vermelhos["clube"]
+    .tolist()
+)
+
+
+# --------------------------------------------------
 # Gráfico
 # --------------------------------------------------
 
@@ -1029,6 +1067,11 @@ fig_vermelhos.update_layout(
 
     showlegend=(
         clube_selecionado != "Todos"
+    ),
+
+    yaxis=dict(
+        categoryorder="array",
+        categoryarray=ordem_clubes_vermelhos
     )
 )
 
@@ -1037,3 +1080,465 @@ st.plotly_chart(
     fig_vermelhos,
     width="stretch"
 )
+
+
+# ==================================================
+# EVOLUÇÃO DISCIPLINAR DO CLUBE
+# ==================================================
+
+if club_id is not None:
+
+    st.divider()
+
+    st.subheader(
+        f"Evolução disciplinar do {clube_selecionado}"
+    )
+
+    st.write(
+        "Acompanhe a evolução dos principais indicadores "
+        "disciplinares do clube ao longo das temporadas."
+    )
+
+
+    # --------------------------------------------------
+    # Consulta histórica
+    # --------------------------------------------------
+
+    query_evolucao_disciplina = f"""
+    WITH jogos_clube AS (
+
+        SELECT
+            season_id,
+
+            home_fouls AS faltas,
+
+            home_yellow_cards AS amarelos,
+
+            home_red_cards AS vermelhos
+
+        FROM matches
+
+        WHERE home_team_id = {club_id}
+
+
+        UNION ALL
+
+
+        SELECT
+            season_id,
+
+            away_fouls AS faltas,
+
+            away_yellow_cards AS amarelos,
+
+            away_red_cards AS vermelhos
+
+        FROM matches
+
+        WHERE away_team_id = {club_id}
+    )
+
+    SELECT
+        s.season,
+
+        COUNT(*) AS jogos,
+
+        ROUND(
+            AVG(j.faltas)::numeric,
+            2
+        ) AS faltas_por_jogo,
+
+        ROUND(
+            AVG(j.amarelos)::numeric,
+            2
+        ) AS amarelos_por_jogo,
+
+        ROUND(
+            AVG(j.amarelos + j.vermelhos)::numeric,
+            2
+        ) AS cartoes_por_jogo,
+
+        SUM(j.vermelhos)
+            AS vermelhos,
+
+        ROUND(
+            (
+                SUM(j.vermelhos)::numeric
+                / COUNT(*)
+            ) * 100,
+            2
+        ) AS vermelhos_por_100_jogos
+
+    FROM jogos_clube j
+
+    JOIN seasons s
+        ON s.id = j.season_id
+
+    GROUP BY
+        s.id,
+        s.season
+
+    ORDER BY
+        s.season;
+    """
+
+
+    evolucao_disciplina = executar_query(
+        query_evolucao_disciplina
+    )
+
+
+    # --------------------------------------------------
+    # Garantir valores numéricos
+    # --------------------------------------------------
+
+    colunas_evolucao_numericas = [
+        "faltas_por_jogo",
+        "amarelos_por_jogo",
+        "cartoes_por_jogo",
+        "vermelhos_por_100_jogos"
+    ]
+
+
+    for coluna in colunas_evolucao_numericas:
+
+        evolucao_disciplina[coluna] = (
+            evolucao_disciplina[coluna]
+            .astype(float)
+        )
+
+
+    # ==================================================
+    # GRÁFICO 1
+    # FALTAS POR JOGO
+    # ==================================================
+
+    st.markdown(
+        "#### Faltas por jogo"
+    )
+
+
+    fig_faltas_evolucao = px.line(
+        evolucao_disciplina,
+
+        x="season",
+
+        y="faltas_por_jogo",
+
+        markers=True,
+
+        text="faltas_por_jogo",
+
+        labels={
+            "season":
+                "Temporada",
+
+            "faltas_por_jogo":
+                "Faltas por jogo"
+        }
+    )
+
+
+    fig_faltas_evolucao.update_traces(
+        textposition="top center"
+    )
+
+
+    fig_faltas_evolucao.update_layout(
+        xaxis_title="Temporada",
+
+        yaxis_title="Faltas por jogo",
+
+        hovermode="x unified"
+    )
+
+
+    # --------------------------------------------------
+    # Destacar temporada selecionada
+    # --------------------------------------------------
+
+    if temporada_selecionada != "Todas":
+
+        destaque_disciplina = (
+            evolucao_disciplina[
+                evolucao_disciplina["season"]
+                == temporada_selecionada
+            ]
+        )
+
+
+        if not destaque_disciplina.empty:
+
+            fig_faltas_evolucao.add_scatter(
+                x=destaque_disciplina[
+                    "season"
+                ],
+
+                y=destaque_disciplina[
+                    "faltas_por_jogo"
+                ],
+
+                mode="markers",
+
+                marker=dict(
+                    size=16,
+
+                    symbol="circle-open",
+
+                    line=dict(
+                        width=3
+                    )
+                ),
+
+                showlegend=False,
+
+                hoverinfo="skip"
+            )
+
+
+    st.plotly_chart(
+        fig_faltas_evolucao,
+        width="stretch"
+    )
+
+
+    # ==================================================
+    # GRÁFICO 2
+    # CARTÕES POR JOGO
+    # ==================================================
+
+    st.markdown(
+        "#### Cartões por jogo"
+    )
+
+
+    evolucao_cartoes = (
+        evolucao_disciplina[
+            [
+                "season",
+                "amarelos_por_jogo",
+                "cartoes_por_jogo"
+            ]
+        ]
+        .melt(
+            id_vars="season",
+
+            var_name="indicador",
+
+            value_name="valor"
+        )
+    )
+
+
+    nomes_indicadores_cartoes = {
+        "amarelos_por_jogo":
+            "Cartões amarelos por jogo",
+
+        "cartoes_por_jogo":
+            "Total de cartões por jogo"
+    }
+
+
+    evolucao_cartoes[
+        "indicador"
+    ] = (
+        evolucao_cartoes[
+            "indicador"
+        ]
+        .map(
+            nomes_indicadores_cartoes
+        )
+    )
+
+
+    fig_cartoes_evolucao = px.line(
+        evolucao_cartoes,
+
+        x="season",
+
+        y="valor",
+
+        color="indicador",
+
+        markers=True,
+
+        labels={
+            "season":
+                "Temporada",
+
+            "valor":
+                "Cartões por jogo",
+
+            "indicador":
+                ""
+        }
+    )
+
+
+    fig_cartoes_evolucao.update_layout(
+        xaxis_title="Temporada",
+
+        yaxis_title="Cartões por jogo",
+
+        hovermode="x unified",
+
+        legend_title_text=""
+    )
+
+
+    # --------------------------------------------------
+    # Destacar temporada no gráfico de cartões
+    # --------------------------------------------------
+
+    if temporada_selecionada != "Todas":
+
+        destaque_cartoes = (
+            evolucao_cartoes[
+                evolucao_cartoes["season"]
+                == temporada_selecionada
+            ]
+        )
+
+
+        if not destaque_cartoes.empty:
+
+            fig_cartoes_evolucao.add_scatter(
+                x=destaque_cartoes[
+                    "season"
+                ],
+
+                y=destaque_cartoes[
+                    "valor"
+                ],
+
+                mode="markers",
+
+                marker=dict(
+                    size=14,
+
+                    symbol="circle-open",
+
+                    line=dict(
+                        width=3
+                    )
+                ),
+
+                showlegend=False,
+
+                hoverinfo="skip"
+            )
+
+
+    st.plotly_chart(
+        fig_cartoes_evolucao,
+        width="stretch"
+    )
+
+
+    # ==================================================
+    # GRÁFICO 3
+    # CARTÕES VERMELHOS A CADA 100 JOGOS
+    # ==================================================
+
+    st.markdown(
+        "#### Cartões vermelhos a cada 100 jogos"
+    )
+
+
+    evolucao_disciplina[
+        "destaque_temporada"
+    ] = (
+        evolucao_disciplina[
+            "season"
+        ]
+        .apply(
+            lambda temporada:
+            "Temporada selecionada"
+            if temporada == temporada_selecionada
+            else "Demais temporadas"
+        )
+    )
+
+
+    ordem_temporadas = (
+        evolucao_disciplina[
+            "season"
+        ]
+        .tolist()
+    )
+
+
+    fig_vermelhos_evolucao = px.bar(
+        evolucao_disciplina,
+
+        x="season",
+
+        y="vermelhos_por_100_jogos",
+
+        text="vermelhos_por_100_jogos",
+
+        color="destaque_temporada",
+
+        color_discrete_map={
+            "Temporada selecionada":
+                "#FFD700",
+
+            "Demais temporadas":
+                "#7EC8F5"
+        },
+
+        hover_data={
+            "jogos": True,
+            "vermelhos": True,
+            "vermelhos_por_100_jogos": ":.2f",
+            "destaque_temporada": False
+        },
+
+        labels={
+            "season":
+                "Temporada",
+
+            "vermelhos_por_100_jogos":
+                "Vermelhos a cada 100 jogos",
+
+            "vermelhos":
+                "Cartões vermelhos",
+
+            "jogos":
+                "Jogos",
+
+            "destaque_temporada":
+                ""
+        }
+    )
+
+
+    fig_vermelhos_evolucao.update_traces(
+        texttemplate="%{text:.2f}",
+
+        textposition="outside"
+    )
+
+
+    fig_vermelhos_evolucao.update_layout(
+        xaxis_title="Temporada",
+
+        yaxis_title="Cartões vermelhos a cada 100 jogos",
+
+        legend_title_text="",
+
+        showlegend=(
+            temporada_selecionada != "Todas"
+        ),
+
+        xaxis=dict(
+            categoryorder="array",
+            categoryarray=ordem_temporadas
+        )
+    )
+
+
+    st.plotly_chart(
+        fig_vermelhos_evolucao,
+        width="stretch"
+    )
