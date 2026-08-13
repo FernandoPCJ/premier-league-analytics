@@ -1941,3 +1941,529 @@ st.plotly_chart(
     fig_comparacao,
     width="stretch"
 )
+
+# ==================================================
+# DESEMPENHO MÉDIO X CONSISTÊNCIA DOS CLUBES
+# ==================================================
+
+st.divider()
+
+st.subheader(
+    "Desempenho médio × Consistência dos clubes"
+)
+
+st.write(
+    "Compare o desempenho médio dos clubes com a variação "
+    "dos resultados entre temporadas. Para esta análise, "
+    "são considerados clubes com pelo menos 5 temporadas."
+)
+
+
+# ==================================================
+# PONTOS POR CLUBE E TEMPORADA
+# ==================================================
+
+query_consistencia = """
+WITH jogos_clubes AS (
+
+    SELECT
+        season_id,
+        home_team_id AS team_id,
+        home_goals AS gols_pro,
+        away_goals AS gols_contra,
+
+        CASE
+            WHEN home_goals > away_goals THEN 3
+            WHEN home_goals = away_goals THEN 1
+            ELSE 0
+        END AS pontos
+
+    FROM matches
+
+
+    UNION ALL
+
+
+    SELECT
+        season_id,
+        away_team_id AS team_id,
+        away_goals AS gols_pro,
+        home_goals AS gols_contra,
+
+        CASE
+            WHEN away_goals > home_goals THEN 3
+            WHEN away_goals = home_goals THEN 1
+            ELSE 0
+        END AS pontos
+
+    FROM matches
+),
+
+clube_temporada AS (
+
+    SELECT
+        season_id,
+        team_id,
+
+        COUNT(*) AS jogos,
+
+        SUM(pontos) AS pontos,
+
+        SUM(gols_pro) AS gols_pro,
+
+        SUM(gols_contra) AS gols_contra,
+
+        SUM(gols_pro - gols_contra) AS saldo_gols,
+
+        SUM(pontos)::numeric
+        / COUNT(*) AS pontos_por_jogo
+
+    FROM jogos_clubes
+
+    GROUP BY
+        season_id,
+        team_id
+)
+
+SELECT
+    s.season,
+    t.name AS clube,
+    ct.jogos,
+    ct.pontos,
+    ct.gols_pro,
+    ct.gols_contra,
+    ct.saldo_gols,
+    ct.pontos_por_jogo
+
+FROM clube_temporada ct
+
+JOIN seasons s
+    ON s.id = ct.season_id
+
+JOIN teams t
+    ON t.id = ct.team_id
+
+ORDER BY
+    t.name,
+    s.season;
+"""
+
+
+dados_consistencia = executar_query(
+    query_consistencia
+)
+
+
+# --------------------------------------------------
+# Garantir tipos numéricos
+# --------------------------------------------------
+
+dados_consistencia[
+    "pontos_por_jogo"
+] = (
+    dados_consistencia[
+        "pontos_por_jogo"
+    ]
+    .astype(float)
+)
+
+
+dados_consistencia[
+    "saldo_gols"
+] = (
+    dados_consistencia[
+        "saldo_gols"
+    ]
+    .astype(float)
+)
+
+
+# ==================================================
+# RESUMO POR CLUBE
+# ==================================================
+
+resumo_consistencia = (
+    dados_consistencia
+    .groupby(
+        "clube",
+        as_index=False
+    )
+    .agg(
+        temporadas=(
+            "season",
+            "nunique"
+        ),
+
+        media_pontos_jogo=(
+            "pontos_por_jogo",
+            "mean"
+        ),
+
+        desvio_pontos_jogo=(
+            "pontos_por_jogo",
+            "std"
+        ),
+
+        media_saldo_gols=(
+            "saldo_gols",
+            "mean"
+        )
+    )
+)
+
+
+# --------------------------------------------------
+# Pelo menos 5 temporadas
+# --------------------------------------------------
+
+resumo_consistencia = (
+    resumo_consistencia[
+        resumo_consistencia[
+            "temporadas"
+        ] >= 5
+    ]
+    .copy()
+)
+
+
+# --------------------------------------------------
+# Arredondamentos
+# --------------------------------------------------
+
+resumo_consistencia[
+    "media_pontos_jogo"
+] = (
+    resumo_consistencia[
+        "media_pontos_jogo"
+    ]
+    .round(3)
+)
+
+
+resumo_consistencia[
+    "desvio_pontos_jogo"
+] = (
+    resumo_consistencia[
+        "desvio_pontos_jogo"
+    ]
+    .round(3)
+)
+
+
+resumo_consistencia[
+    "media_saldo_gols"
+] = (
+    resumo_consistencia[
+        "media_saldo_gols"
+    ]
+    .round(3)
+)
+
+
+# ==================================================
+# MÉDIAS DE REFERÊNCIA
+# ==================================================
+
+media_geral_pontos = (
+    resumo_consistencia[
+        "media_pontos_jogo"
+    ]
+    .mean()
+)
+
+
+media_geral_desvio = (
+    resumo_consistencia[
+        "desvio_pontos_jogo"
+    ]
+    .mean()
+)
+
+
+# ==================================================
+# CLASSIFICAÇÃO DOS CLUBES
+# ==================================================
+
+def classificar_clube(linha):
+
+    alto_desempenho = (
+        linha["media_pontos_jogo"]
+        >= media_geral_pontos
+    )
+
+    consistente = (
+        linha["desvio_pontos_jogo"]
+        <= media_geral_desvio
+    )
+
+
+    if alto_desempenho and consistente:
+
+        return (
+            "Alto desempenho + consistente"
+        )
+
+
+    elif alto_desempenho and not consistente:
+
+        return (
+            "Alto desempenho + volátil"
+        )
+
+
+    elif not alto_desempenho and consistente:
+
+        return (
+            "Abaixo da média + consistente"
+        )
+
+
+    else:
+
+        return (
+            "Abaixo da média + volátil"
+        )
+
+
+resumo_consistencia["perfil"] = (
+    resumo_consistencia.apply(
+        classificar_clube,
+        axis=1
+    )
+)
+
+
+# ==================================================
+# DESTAQUE DO CLUBE SELECIONADO
+# ==================================================
+
+resumo_consistencia["destaque"] = (
+    resumo_consistencia["clube"]
+    .apply(
+        lambda clube:
+        "Clube selecionado"
+        if clube == clube_selecionado
+        else "Demais clubes"
+    )
+)
+
+
+# ==================================================
+# INDICADORES DE REFERÊNCIA
+# ==================================================
+
+col1, col2 = st.columns(2)
+
+
+with col1:
+
+    st.metric(
+        label="Média geral de pontos por jogo",
+        value=f"{media_geral_pontos:.3f}"
+    )
+
+
+with col2:
+
+    st.metric(
+        label="Média do desvio entre temporadas",
+        value=f"{media_geral_desvio:.3f}"
+    )
+
+
+# ==================================================
+# SCATTER
+# ==================================================
+
+fig_consistencia = px.scatter(
+    resumo_consistencia,
+
+    x="media_pontos_jogo",
+
+    y="desvio_pontos_jogo",
+
+    hover_name="clube",
+
+    color="destaque",
+
+    color_discrete_map={
+        "Clube selecionado":
+            "#FFD700",
+
+        "Demais clubes":
+            "#7EC8F5"
+    },
+
+    hover_data={
+        "temporadas": True,
+        "media_pontos_jogo": ":.3f",
+        "desvio_pontos_jogo": ":.3f",
+        "media_saldo_gols": ":.3f",
+        "perfil": True,
+        "destaque": False
+    },
+
+    labels={
+        "media_pontos_jogo":
+            "Média de pontos por jogo",
+
+        "desvio_pontos_jogo":
+            "Desvio padrão entre temporadas",
+
+        "temporadas":
+            "Temporadas",
+
+        "media_saldo_gols":
+            "Saldo médio de gols",
+
+        "perfil":
+            "Perfil",
+
+        "destaque":
+            ""
+    }
+)
+
+
+fig_consistencia.update_traces(
+    marker=dict(
+        size=13
+    )
+)
+
+
+# --------------------------------------------------
+# Linha vertical: desempenho médio
+# --------------------------------------------------
+
+fig_consistencia.add_vline(
+    x=media_geral_pontos,
+
+    line_dash="dash",
+
+    annotation_text="Média de desempenho",
+
+    annotation_position="top"
+)
+
+
+# --------------------------------------------------
+# Linha horizontal: consistência média
+# --------------------------------------------------
+
+fig_consistencia.add_hline(
+    y=media_geral_desvio,
+
+    line_dash="dash",
+
+    annotation_text="Média de variação",
+
+    annotation_position="right"
+)
+
+
+fig_consistencia.update_layout(
+    xaxis_title="Média de pontos por jogo",
+
+    yaxis_title="Desvio padrão entre temporadas",
+
+    legend_title_text="",
+
+    showlegend=(
+        clube_selecionado != "Todos"
+    )
+)
+
+
+# --------------------------------------------------
+# Nome do clube selecionado
+# --------------------------------------------------
+
+if clube_selecionado != "Todos":
+
+    clube_consistencia = (
+        resumo_consistencia[
+            resumo_consistencia["clube"]
+            == clube_selecionado
+        ]
+    )
+
+
+    if not clube_consistencia.empty:
+
+        fig_consistencia.add_annotation(
+            x=clube_consistencia[
+                "media_pontos_jogo"
+            ].iloc[0],
+
+            y=clube_consistencia[
+                "desvio_pontos_jogo"
+            ].iloc[0],
+
+            text=clube_selecionado,
+
+            showarrow=True,
+
+            arrowhead=2,
+
+            ax=40,
+
+            ay=-35
+        )
+
+    else:
+
+        st.info(
+            f"O {clube_selecionado} não possui pelo menos "
+            "5 temporadas no período analisado e, por isso, "
+            "não entra na análise de consistência."
+        )
+
+
+st.plotly_chart(
+    fig_consistencia,
+    width="stretch"
+)
+
+
+# ==================================================
+# TABELA RESUMIDA
+# ==================================================
+
+st.markdown(
+    "#### Classificação dos clubes"
+)
+
+
+tabela_consistencia = (
+    resumo_consistencia[
+        [
+            "clube",
+            "temporadas",
+            "media_pontos_jogo",
+            "desvio_pontos_jogo",
+            "perfil"
+        ]
+    ]
+    .sort_values(
+        by="media_pontos_jogo",
+        ascending=False
+    )
+    .copy()
+)
+
+
+tabela_consistencia.columns = [
+    "Clube",
+    "Temporadas",
+    "Média de pontos por jogo",
+    "Desvio entre temporadas",
+    "Perfil"
+]
+
+
+st.dataframe(
+    tabela_consistencia,
+    width="stretch",
+    hide_index=True
+)
