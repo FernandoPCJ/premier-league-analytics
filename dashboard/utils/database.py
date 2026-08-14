@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 
 
 @st.cache_resource
@@ -9,14 +10,23 @@ def get_engine():
 
     config = st.secrets["postgres"]
 
-    url = (
-        f"postgresql+psycopg://"
-        f"{config['user']}:{config['password']}"
-        f"@{config['host']}:{config['port']}"
-        f"/{config['database']}"
+    url = URL.create(
+        drivername="postgresql+psycopg",
+        username=config["user"],
+        password=config["password"],
+        host=config["host"],
+        port=int(config["port"]),
+        database=config["database"],
+        query={
+            "sslmode": "require",
+            "channel_binding": "require"
+        }
     )
 
-    engine = create_engine(url)
+    engine = create_engine(
+        url,
+        pool_pre_ping=True
+    )
 
     return engine
 
